@@ -1,0 +1,101 @@
+### TP1 - Colección de requests (formato .http, compatible con IntelliJ HTTP Client / VS Code REST Client)
+### Requiere el proyecto corriendo en http://localhost:8080
+
+@baseUrl = http://localhost:8080
+
+
+########################################
+# PRODUCTOS (solo lectura)
+########################################
+
+### Éxito - Listar productos (paginado)
+GET {{baseUrl}}/api/productos?limit=5&skip=0
+Accept: application/json
+
+
+### Éxito - Obtener un producto por id existente
+GET {{baseUrl}}/api/productos/1
+Accept: application/json
+
+
+### Error - Producto con id inexistente en DummyJSON -> falla al consumir el servicio externo (502 Bad Gateway)
+GET {{baseUrl}}/api/productos/999999
+Accept: application/json
+
+
+########################################
+# FAVORITOS (CRUD completo)
+########################################
+
+### Éxito - Crear un favorito (201 Created)
+# @name crearFavorito
+POST {{baseUrl}}/api/favoritos
+Content-Type: application/json
+
+{
+  "productoId": 1,
+  "nota": "Regalo para mi hermana"
+}
+
+
+### Error - Crear un favorito sin productoId (400 Bad Request, falla de validación)
+POST {{baseUrl}}/api/favoritos
+Content-Type: application/json
+
+{
+  "nota": "Falta el productoId"
+}
+
+
+### Error - Crear un favorito con productoId negativo (400 Bad Request, falla de validación)
+POST {{baseUrl}}/api/favoritos
+Content-Type: application/json
+
+{
+  "productoId": -5,
+  "nota": "productoId inválido"
+}
+
+
+### Éxito - Listar todos los favoritos (200 OK)
+GET {{baseUrl}}/api/favoritos
+Accept: application/json
+
+
+### Éxito - Obtener un favorito por id existente (200 OK)
+# Reemplazar {id} por un id devuelto en "crearFavorito" (o el primero creado, normalmente 1)
+GET {{baseUrl}}/api/favoritos/1
+Accept: application/json
+
+
+### Error - Obtener un favorito con id inexistente (404 Not Found)
+GET {{baseUrl}}/api/favoritos/999
+Accept: application/json
+
+
+### Éxito - Actualizar un favorito existente (200 OK)
+PUT {{baseUrl}}/api/favoritos/1
+Content-Type: application/json
+
+{
+  "productoId": 2,
+  "nota": "Nota actualizada"
+}
+
+
+### Error - Actualizar un favorito inexistente (404 Not Found)
+PUT {{baseUrl}}/api/favoritos/999
+Content-Type: application/json
+
+{
+  "productoId": 2,
+  "nota": "No debería aplicarse"
+}
+
+
+### Éxito - Eliminar un favorito existente (204 No Content)
+DELETE {{baseUrl}}/api/favoritos/1
+
+
+### Error - Eliminar un favorito inexistente (404 Not Found)
+DELETE {{baseUrl}}/api/favoritos/999

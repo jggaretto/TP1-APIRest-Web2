@@ -1,0 +1,61 @@
+package com.desarrolloweb.tp1.service;
+
+import com.desarrolloweb.tp1.dto.FavoritoRequestDTO;
+import com.desarrolloweb.tp1.dto.FavoritoResponseDTO;
+import com.desarrolloweb.tp1.exception.FavoritoNotFoundException;
+import com.desarrolloweb.tp1.model.Favorito;
+import com.desarrolloweb.tp1.repository.FavoritoRepository;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+public class FavoritoService {
+
+    private final FavoritoRepository favoritoRepository;
+
+    public FavoritoService(FavoritoRepository favoritoRepository) {
+        this.favoritoRepository = favoritoRepository;
+    }
+
+    public FavoritoResponseDTO crear(FavoritoRequestDTO request) {
+        Favorito favorito = new Favorito(null, request.productoId(), request.nota(), LocalDateTime.now());
+        return aResponseDTO(favoritoRepository.save(favorito));
+    }
+
+    public List<FavoritoResponseDTO> listar() {
+        return favoritoRepository.findAll().stream()
+                .map(this::aResponseDTO)
+                .toList();
+    }
+
+    public FavoritoResponseDTO obtener(Long id) {
+        return favoritoRepository.findById(id)
+                .map(this::aResponseDTO)
+                .orElseThrow(() -> new FavoritoNotFoundException(id));
+    }
+
+    public FavoritoResponseDTO actualizar(Long id, FavoritoRequestDTO request) {
+        Favorito favorito = favoritoRepository.findById(id)
+                .orElseThrow(() -> new FavoritoNotFoundException(id));
+        favorito.setProductoId(request.productoId());
+        favorito.setNota(request.nota());
+        return aResponseDTO(favoritoRepository.save(favorito));
+    }
+
+    public void eliminar(Long id) {
+        if (!favoritoRepository.existsById(id)) {
+            throw new FavoritoNotFoundException(id);
+        }
+        favoritoRepository.deleteById(id);
+    }
+
+    private FavoritoResponseDTO aResponseDTO(Favorito favorito) {
+        return new FavoritoResponseDTO(
+                favorito.getId(),
+                favorito.getProductoId(),
+                favorito.getNota(),
+                favorito.getFechaAgregado());
+    }
+}
