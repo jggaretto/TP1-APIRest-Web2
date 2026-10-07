@@ -2,7 +2,6 @@ package com.desarrolloweb.tp1.repository.jpa;
 
 import com.desarrolloweb.tp1.model.Favorito;
 import com.desarrolloweb.tp1.repository.FavoritoRepository;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,7 +13,6 @@ import java.util.Optional;
  * (persistencia) y Favorito (dominio) en ambas direcciones.
  */
 @Repository
-@Profile("!memory")
 public class FavoritoRepositoryAdapter implements FavoritoRepository {
 
     private final FavoritoJpaRepository favoritoJpaRepository;
