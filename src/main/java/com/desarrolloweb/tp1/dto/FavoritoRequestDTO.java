@@ -10,6 +10,10 @@ public record FavoritoRequestDTO(
         @Positive(message = "productoId debe ser un número positivo")
         Long productoId,
 
+        @NotNull(message = "listaId es obligatorio")
+        @Positive(message = "listaId debe ser un número positivo")
+        Long listaId,
+
         @Size(max = 255, message = "la nota no puede superar los 255 caracteres")
         String nota
 ) {

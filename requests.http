@@ -1,5 +1,5 @@
-### TP1 - Colección de requests (formato .http, compatible con IntelliJ HTTP Client / VS Code REST Client)
-### Requiere el proyecto corriendo en http://localhost:8080
+### TP1 + TP2 - Colección de requests (formato .http, compatible con IntelliJ HTTP Client / VS Code REST Client)
+### Requiere el proyecto y PostgreSQL corriendo (docker compose up -d && mvn spring-boot:run)
 
 @baseUrl = http://localhost:8080
 
@@ -24,36 +24,115 @@ Accept: application/json
 
 
 ########################################
-# FAVORITOS (CRUD completo)
+# LISTAS (CRUD, TP2)
 ########################################
 
-### Éxito - Crear un favorito (201 Created)
+### Éxito - Crear una lista (201 Created)
+# @name crearListaA
+POST {{baseUrl}}/api/listas
+Content-Type: application/json
+
+{
+  "nombre": "Regalos"
+}
+
+
+### Éxito - Crear una segunda lista, destino para mover-favoritos (201 Created)
+# @name crearListaB
+POST {{baseUrl}}/api/listas
+Content-Type: application/json
+
+{
+  "nombre": "Para comprar en oferta"
+}
+
+
+### Error - Crear una lista sin nombre (400 Bad Request)
+POST {{baseUrl}}/api/listas
+Content-Type: application/json
+
+{
+  "nombre": ""
+}
+
+
+### Éxito - Listar todas las listas (200 OK)
+GET {{baseUrl}}/api/listas
+Accept: application/json
+
+
+### Éxito - Obtener una lista por id existente (200 OK)
+GET {{baseUrl}}/api/listas/1
+Accept: application/json
+
+
+### Error - Obtener una lista inexistente (404 Not Found)
+GET {{baseUrl}}/api/listas/999
+Accept: application/json
+
+
+### Éxito - Favoritos de una lista (200 OK, puede devolver [] si está vacía)
+GET {{baseUrl}}/api/listas/1/favoritos
+Accept: application/json
+
+
+### Error - Favoritos de una lista inexistente (404 Not Found)
+GET {{baseUrl}}/api/listas/999/favoritos
+Accept: application/json
+
+
+### Error - Eliminar una lista que todavía tiene favoritos (409 Conflict)
+# Ejecutar después de crear al menos un favorito en la lista 1
+DELETE {{baseUrl}}/api/listas/1
+
+
+### Éxito - Eliminar una lista vacía (204 No Content)
+# Crear una lista nueva y borrarla sin agregarle favoritos
+# @name crearListaVacia
+POST {{baseUrl}}/api/listas
+Content-Type: application/json
+
+{
+  "nombre": "Lista para borrar"
+}
+
+###
+DELETE {{baseUrl}}/api/listas/3
+
+
+########################################
+# FAVORITOS (CRUD, ahora sobre PostgreSQL)
+########################################
+
+### Éxito - Crear un favorito (201 Created) - requiere que exista la lista 1
 # @name crearFavorito
 POST {{baseUrl}}/api/favoritos
 Content-Type: application/json
 
 {
   "productoId": 1,
+  "listaId": 1,
   "nota": "Regalo para mi hermana"
 }
 
 
-### Error - Crear un favorito sin productoId (400 Bad Request, falla de validación)
+### Error - Crear un favorito sin productoId ni listaId (400 Bad Request, falla de validación)
 POST {{baseUrl}}/api/favoritos
 Content-Type: application/json
 
 {
-  "nota": "Falta el productoId"
+  "nota": "Faltan productoId y listaId"
 }
 
 
-### Error - Crear un favorito con productoId negativo (400 Bad Request, falla de validación)
+### Error - Crear un favorito con una lista inexistente (404 Not Found)
 POST {{baseUrl}}/api/favoritos
 Content-Type: application/json
 
 {
-  "productoId": -5,
-  "nota": "productoId inválido"
+  "productoId": 1,
+  "listaId": 999,
+  "nota": "La lista 999 no existe"
 }
 
 
@@ -63,7 +142,6 @@ Accept: application/json
 
 
 ### Éxito - Obtener un favorito por id existente (200 OK)
-# Reemplazar {id} por un id devuelto en "crearFavorito" (o el primero creado, normalmente 1)
 GET {{baseUrl}}/api/favoritos/1
 Accept: application/json
 
@@ -79,6 +157,7 @@ Content-Type: application/json
 
 {
   "productoId": 2,
+  "listaId": 1,
   "nota": "Nota actualizada"
 }
 
@@ -89,6 +168,7 @@ Content-Type: application/json
 
 {
   "productoId": 2,
+  "listaId": 1,
   "nota": "No debería aplicarse"
 }
 
@@ -99,3 +179,35 @@ DELETE {{baseUrl}}/api/favoritos/1
 
 ### Error - Eliminar un favorito inexistente (404 Not Found)
 DELETE {{baseUrl}}/api/favoritos/999
+
+
+########################################
+# MOVER FAVORITOS ENTRE LISTAS (operación transaccional, TP2)
+########################################
+
+### Éxito - Mover todos los favoritos de la lista 1 a la lista 2, y borrar la lista 1 (204 No Content)
+# Requiere que existan las listas 1 y 2, y al menos un favorito en la lista 1
+POST {{baseUrl}}/api/listas/1/mover-favoritos
+Content-Type: application/json
+
+{
+  "listaDestinoId": 2
+}
+
+
+### Error - Mover favoritos desde una lista origen inexistente (404 Not Found)
+POST {{baseUrl}}/api/listas/999/mover-favoritos
+Content-Type: application/json
+
+{
+  "listaDestinoId": 2
+}
+
+
+### Error - Mover favoritos hacia una lista destino inexistente (404 Not Found)
+POST {{baseUrl}}/api/listas/2/mover-favoritos
+Content-Type: application/json
+
+{
+  "listaDestinoId": 999
+}

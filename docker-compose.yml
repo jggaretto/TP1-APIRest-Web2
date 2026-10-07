@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: tp1-favoritos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tp1_favoritos}
+      POSTGRES_USER: ${POSTGRES_USER:-tp1_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tp1_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tp1-favoritos-data:/var/lib/postgresql/data
+
+volumes:
+  tp1-favoritos-data:

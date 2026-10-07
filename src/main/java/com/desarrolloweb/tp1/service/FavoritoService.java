@@ -3,8 +3,10 @@ package com.desarrolloweb.tp1.service;
 import com.desarrolloweb.tp1.dto.FavoritoRequestDTO;
 import com.desarrolloweb.tp1.dto.FavoritoResponseDTO;
 import com.desarrolloweb.tp1.exception.FavoritoNotFoundException;
+import com.desarrolloweb.tp1.exception.ListaNotFoundException;
 import com.desarrolloweb.tp1.model.Favorito;
 import com.desarrolloweb.tp1.repository.FavoritoRepository;
+import com.desarrolloweb.tp1.repository.ListaRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -14,13 +16,17 @@ import java.util.List;
 public class FavoritoService {
 
     private final FavoritoRepository favoritoRepository;
+    private final ListaRepository listaRepository;
 
-    public FavoritoService(FavoritoRepository favoritoRepository) {
+    public FavoritoService(FavoritoRepository favoritoRepository, ListaRepository listaRepository) {
         this.favoritoRepository = favoritoRepository;
+        this.listaRepository = listaRepository;
     }
 
     public FavoritoResponseDTO crear(FavoritoRequestDTO request) {
-        Favorito favorito = new Favorito(null, request.productoId(), request.nota(), LocalDateTime.now());
+        validarListaExiste(request.listaId());
+        Favorito favorito = new Favorito(null, request.productoId(), request.listaId(),
+                request.nota(), LocalDateTime.now());
         return aResponseDTO(favoritoRepository.save(favorito));
     }
 
@@ -37,11 +43,12 @@ public class FavoritoService {
     }
 
     public FavoritoResponseDTO actualizar(Long id, FavoritoRequestDTO request) {
-        Favorito favorito = favoritoRepository.findById(id)
+        Favorito existente = favoritoRepository.findById(id)
                 .orElseThrow(() -> new FavoritoNotFoundException(id));
-        favorito.setProductoId(request.productoId());
-        favorito.setNota(request.nota());
-        return aResponseDTO(favoritoRepository.save(favorito));
+        validarListaExiste(request.listaId());
+        Favorito actualizado = new Favorito(existente.id(), request.productoId(), request.listaId(),
+                request.nota(), existente.fechaAlta());
+        return aResponseDTO(favoritoRepository.save(actualizado));
     }
 
     public void eliminar(Long id) {
@@ -51,11 +58,18 @@ public class FavoritoService {
         favoritoRepository.deleteById(id);
     }
 
+    private void validarListaExiste(Long listaId) {
+        if (!listaRepository.existsById(listaId)) {
+            throw new ListaNotFoundException(listaId);
+        }
+    }
+
     private FavoritoResponseDTO aResponseDTO(Favorito favorito) {
         return new FavoritoResponseDTO(
-                favorito.getId(),
-                favorito.getProductoId(),
-                favorito.getNota(),
-                favorito.getFechaAgregado());
+                favorito.id(),
+                favorito.productoId(),
+                favorito.listaId(),
+                favorito.nota(),
+                favorito.fechaAlta());
     }
 }

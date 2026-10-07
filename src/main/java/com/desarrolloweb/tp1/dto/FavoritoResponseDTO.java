@@ -5,7 +5,8 @@ import java.time.LocalDateTime;
 public record FavoritoResponseDTO(
         Long id,
         Long productoId,
+        Long listaId,
         String nota,
-        LocalDateTime fechaAgregado
+        LocalDateTime fechaAlta
 ) {
 }

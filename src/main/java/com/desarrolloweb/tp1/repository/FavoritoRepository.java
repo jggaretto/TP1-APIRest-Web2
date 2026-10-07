@@ -16,4 +16,6 @@ public interface FavoritoRepository {
     boolean existsById(Long id);
 
     void deleteById(Long id);
+
+    List<Favorito> findByListaId(Long listaId);
 }

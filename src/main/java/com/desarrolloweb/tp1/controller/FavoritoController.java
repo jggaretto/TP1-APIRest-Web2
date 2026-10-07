@@ -14,7 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/favoritos")
-@Tag(name = "Favoritos", description = "CRUD de favoritos, persistidos en memoria")
+@Tag(name = "Favoritos", description = "CRUD de favoritos, persistidos en PostgreSQL vía JPA")
 public class FavoritoController {
 
     private final FavoritoService favoritoService;
