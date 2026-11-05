@@ -9,4 +9,6 @@ public interface FavoritoJpaRepository extends JpaRepository<FavoritoEntity, Lon
     List<FavoritoEntity> findByListaId(Long listaId);
 
     boolean existsByListaId(Long listaId);
+
+    List<FavoritoEntity> findByLista_Usuario_Id(Long usuarioId);
 }

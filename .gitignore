@@ -2,6 +2,13 @@ target/
 *.class
 .idea/
 *.iml
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
 .DS_Store
 *.log
+
+# Base de datos local levantada por scripts/local-postgres.sh
+.local/

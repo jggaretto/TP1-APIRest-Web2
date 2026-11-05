@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DB: levantar PostgreSQL",
+      "type": "shell",
+      "command": "./scripts/local-postgres.sh start",
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: detener PostgreSQL local",
+      "type": "shell",
+      "command": "./scripts/local-postgres.sh stop",
+      "problemMatcher": []
+    },
+    {
+      "label": "Maven: tests unitarios",
+      "type": "shell",
+      "command": "./mvnw test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Maven: verify (unitarias + integración)",
+      "type": "shell",
+      "command": "./mvnw verify",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "App: spring-boot:run",
+      "type": "shell",
+      "command": "./mvnw spring-boot:run",
+      "problemMatcher": []
+    }
+  ]
+}

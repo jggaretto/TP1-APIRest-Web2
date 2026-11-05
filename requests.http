@@ -1,54 +1,156 @@
-### TP1 + TP2 - Colección de requests (formato .http, compatible con IntelliJ HTTP Client / VS Code REST Client)
-### Requiere el proyecto y PostgreSQL corriendo (docker compose up -d && mvn spring-boot:run)
+### TP3 - Colección de requests (formato .http, compatible con VS Code REST Client / IntelliJ HTTP Client)
+### Requiere la app corriendo y PostgreSQL arriba:
+###   ./scripts/local-postgres.sh start
+###   ./mvnw spring-boot:run
 
 @baseUrl = http://localhost:8080
+@email = ana@example.com
+@password = password123
+@emailOtro = beto@example.com
+@passwordOtro = password123
 
 
 ########################################
-# PRODUCTOS (solo lectura)
+# ESTADO (público)
+########################################
+
+### Éxito - Health check (200 OK)
+GET {{baseUrl}}/health
+
+
+########################################
+# PRODUCTOS (público, solo lectura)
 ########################################
 
 ### Éxito - Listar productos (paginado)
 GET {{baseUrl}}/api/productos?limit=5&skip=0
 Accept: application/json
 
-
 ### Éxito - Obtener un producto por id existente
 GET {{baseUrl}}/api/productos/1
 Accept: application/json
 
-
-### Error - Producto con id inexistente en DummyJSON -> falla al consumir el servicio externo (502 Bad Gateway)
+### Error - Producto inexistente en DummyJSON -> 502 Bad Gateway
 GET {{baseUrl}}/api/productos/999999
 Accept: application/json
 
 
 ########################################
-# LISTAS (CRUD, TP2)
+# AUTENTICACIÓN (público)
 ########################################
 
-### Éxito - Crear una lista (201 Created)
+### Éxito - Registrar usuario A (201 Created)
+POST {{baseUrl}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Éxito - Registrar usuario B (201 Created)
+POST {{baseUrl}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "email": "{{emailOtro}}",
+  "password": "{{passwordOtro}}"
+}
+
+### Error - Registro con email repetido (409 Conflict)
+POST {{baseUrl}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Error - Registro con contraseña corta (400 Bad Request)
+POST {{baseUrl}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "email": "corta@example.com",
+  "password": "123"
+}
+
+### Éxito - Login usuario A (200 OK, devuelve token)
+# @name loginAna
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Éxito - Login usuario B (200 OK, devuelve token)
+# @name loginBeto
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{emailOtro}}",
+  "password": "{{passwordOtro}}"
+}
+
+### Error - Login con contraseña incorrecta (401 Unauthorized)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "incorrecta"
+}
+
+
+########################################
+# LISTAS (requieren token)
+########################################
+
+### Éxito - Crear lista del usuario A (201 Created)
 # @name crearListaA
 POST {{baseUrl}}/api/listas
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
   "nombre": "Regalos"
 }
 
-
-### Éxito - Crear una segunda lista, destino para mover-favoritos (201 Created)
+### Éxito - Crear segunda lista del usuario A, destino para mover favoritos (201 Created)
 # @name crearListaB
 POST {{baseUrl}}/api/listas
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
   "nombre": "Para comprar en oferta"
 }
 
+### Éxito - Listar las listas del usuario A (200 OK)
+GET {{baseUrl}}/api/listas
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+### Éxito - Obtener una lista propia (200 OK)
+GET {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+### Error - Sin token (401 Unauthorized)
+GET {{baseUrl}}/api/listas
+
+### Error - Lista ajena (403 Forbidden; ejecutar con el token del usuario B)
+GET {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}
+Authorization: Bearer {{loginBeto.response.body.$.token}}
+
+### Error - Lista inexistente (404 Not Found)
+GET {{baseUrl}}/api/listas/999999
+Authorization: Bearer {{loginAna.response.body.$.token}}
 
 ### Error - Crear una lista sin nombre (400 Bad Request)
 POST {{baseUrl}}/api/listas
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -56,158 +158,103 @@ Content-Type: application/json
 }
 
 
-### Éxito - Listar todas las listas (200 OK)
-GET {{baseUrl}}/api/listas
-Accept: application/json
-
-
-### Éxito - Obtener una lista por id existente (200 OK)
-GET {{baseUrl}}/api/listas/1
-Accept: application/json
-
-
-### Error - Obtener una lista inexistente (404 Not Found)
-GET {{baseUrl}}/api/listas/999
-Accept: application/json
-
-
-### Éxito - Favoritos de una lista (200 OK, puede devolver [] si está vacía)
-GET {{baseUrl}}/api/listas/1/favoritos
-Accept: application/json
-
-
-### Error - Favoritos de una lista inexistente (404 Not Found)
-GET {{baseUrl}}/api/listas/999/favoritos
-Accept: application/json
-
-
-### Error - Eliminar una lista que todavía tiene favoritos (409 Conflict)
-# Ejecutar después de crear al menos un favorito en la lista 1
-DELETE {{baseUrl}}/api/listas/1
-
-
-### Éxito - Eliminar una lista vacía (204 No Content)
-# Crear una lista nueva y borrarla sin agregarle favoritos
-# @name crearListaVacia
-POST {{baseUrl}}/api/listas
-Content-Type: application/json
-
-{
-  "nombre": "Lista para borrar"
-}
-
-###
-DELETE {{baseUrl}}/api/listas/3
-
-
 ########################################
-# FAVORITOS (CRUD, ahora sobre PostgreSQL)
+# FAVORITOS (requieren token; heredan el dueño de la lista)
 ########################################
 
-### Éxito - Crear un favorito (201 Created) - requiere que exista la lista 1
+### Éxito - Crear un favorito en una lista propia (201 Created)
 # @name crearFavorito
 POST {{baseUrl}}/api/favoritos
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
   "productoId": 1,
-  "listaId": 1,
+  "listaId": {{crearListaA.response.body.$.id}},
   "nota": "Regalo para mi hermana"
 }
 
-
-### Error - Crear un favorito sin productoId ni listaId (400 Bad Request, falla de validación)
+### Error - Crear un favorito en una lista ajena (403 Forbidden)
 POST {{baseUrl}}/api/favoritos
+Authorization: Bearer {{loginBeto.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "productoId": 1,
+  "listaId": {{crearListaA.response.body.$.id}},
+  "nota": "No debería poder"
+}
+
+### Error - Crear un favorito sin productoId ni listaId (400 Bad Request)
+POST {{baseUrl}}/api/favoritos
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
   "nota": "Faltan productoId y listaId"
 }
 
-
-### Error - Crear un favorito con una lista inexistente (404 Not Found)
-POST {{baseUrl}}/api/favoritos
-Content-Type: application/json
-
-{
-  "productoId": 1,
-  "listaId": 999,
-  "nota": "La lista 999 no existe"
-}
-
-
-### Éxito - Listar todos los favoritos (200 OK)
+### Éxito - Listar los favoritos del usuario A (200 OK)
 GET {{baseUrl}}/api/favoritos
-Accept: application/json
+Authorization: Bearer {{loginAna.response.body.$.token}}
 
+### Éxito - Obtener un favorito propio (200 OK)
+GET {{baseUrl}}/api/favoritos/{{crearFavorito.response.body.$.id}}
+Authorization: Bearer {{loginAna.response.body.$.token}}
 
-### Éxito - Obtener un favorito por id existente (200 OK)
-GET {{baseUrl}}/api/favoritos/1
-Accept: application/json
-
-
-### Error - Obtener un favorito con id inexistente (404 Not Found)
-GET {{baseUrl}}/api/favoritos/999
-Accept: application/json
-
-
-### Éxito - Actualizar un favorito existente (200 OK)
-PUT {{baseUrl}}/api/favoritos/1
+### Éxito - Actualizar un favorito propio (200 OK)
+PUT {{baseUrl}}/api/favoritos/{{crearFavorito.response.body.$.id}}
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
   "productoId": 2,
-  "listaId": 1,
+  "listaId": {{crearListaA.response.body.$.id}},
   "nota": "Nota actualizada"
 }
 
+### Éxito - Favoritos de una lista propia (200 OK)
+GET {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}/favoritos
+Authorization: Bearer {{loginAna.response.body.$.token}}
 
-### Error - Actualizar un favorito inexistente (404 Not Found)
-PUT {{baseUrl}}/api/favoritos/999
-Content-Type: application/json
+### Error - Favoritos de una lista ajena (403 Forbidden)
+GET {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}/favoritos
+Authorization: Bearer {{loginBeto.response.body.$.token}}
 
-{
-  "productoId": 2,
-  "listaId": 1,
-  "nota": "No debería aplicarse"
-}
-
-
-### Éxito - Eliminar un favorito existente (204 No Content)
-DELETE {{baseUrl}}/api/favoritos/1
-
-
-### Error - Eliminar un favorito inexistente (404 Not Found)
-DELETE {{baseUrl}}/api/favoritos/999
+### Error - Eliminar una lista que todavía tiene favoritos (409 Conflict)
+DELETE {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}
+Authorization: Bearer {{loginAna.response.body.$.token}}
 
 
 ########################################
-# MOVER FAVORITOS ENTRE LISTAS (operación transaccional, TP2)
+# MOVER FAVORITOS ENTRE LISTAS (transaccional, requiere token)
 ########################################
 
-### Éxito - Mover todos los favoritos de la lista 1 a la lista 2, y borrar la lista 1 (204 No Content)
-# Requiere que existan las listas 1 y 2, y al menos un favorito en la lista 1
-POST {{baseUrl}}/api/listas/1/mover-favoritos
+### Éxito - Mover los favoritos de la lista A a la lista B y borrar A (204 No Content)
+# Requiere que la lista A tenga al menos un favorito y que B sea del mismo usuario.
+POST {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}/mover-favoritos
+Authorization: Bearer {{loginAna.response.body.$.token}}
 Content-Type: application/json
 
 {
-  "listaDestinoId": 2
+  "listaDestinoId": {{crearListaB.response.body.$.id}}
 }
 
-
-### Error - Mover favoritos desde una lista origen inexistente (404 Not Found)
-POST {{baseUrl}}/api/listas/999/mover-favoritos
+### Error - Mover favoritos desde una lista ajena (403 Forbidden)
+POST {{baseUrl}}/api/listas/{{crearListaA.response.body.$.id}}/mover-favoritos
+Authorization: Bearer {{loginBeto.response.body.$.token}}
 Content-Type: application/json
 
 {
-  "listaDestinoId": 2
+  "listaDestinoId": {{crearListaB.response.body.$.id}}
 }
 
 
-### Error - Mover favoritos hacia una lista destino inexistente (404 Not Found)
-POST {{baseUrl}}/api/listas/2/mover-favoritos
-Content-Type: application/json
-
-{
-  "listaDestinoId": 999
-}
+########################################
+# ADMINISTRADOR
+########################################
+# Para probar el rol ADMIN, registrá un usuario y promovelo por SQL:
+#   docker compose exec postgres psql -U tp1_user -d tp1_favoritos \
+#     -c "UPDATE usuarios SET rol = 'ADMIN' WHERE email = 'admin@example.com';"
+# Luego volvé a hacer login para que el JWT incluya el rol ADMIN.
+# Un ADMIN puede ver y operar sobre listas de cualquier usuario (200 en vez de 403).
