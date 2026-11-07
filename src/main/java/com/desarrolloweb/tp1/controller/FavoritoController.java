@@ -4,6 +4,7 @@ import com.desarrolloweb.tp1.dto.FavoritoRequestDTO;
 import com.desarrolloweb.tp1.dto.FavoritoResponseDTO;
 import com.desarrolloweb.tp1.service.FavoritoService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -14,7 +15,9 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/favoritos")
-@Tag(name = "Favoritos", description = "CRUD de favoritos, persistidos en PostgreSQL vía JPA")
+@Tag(name = "Favoritos", description = "CRUD de favoritos, persistidos en PostgreSQL. Requiere autenticación: "
+        + "solo se puede operar sobre favoritos de listas propias (un ADMIN puede operar sobre cualquiera).")
+@SecurityRequirement(name = "bearerAuth")
 public class FavoritoController {
 
     private final FavoritoService favoritoService;

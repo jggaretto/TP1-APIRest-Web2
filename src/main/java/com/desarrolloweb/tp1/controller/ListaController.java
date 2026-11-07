@@ -6,6 +6,7 @@ import com.desarrolloweb.tp1.dto.ListaResponseDTO;
 import com.desarrolloweb.tp1.dto.MoverFavoritosRequestDTO;
 import com.desarrolloweb.tp1.service.ListaService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -16,7 +17,9 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/listas")
-@Tag(name = "Listas", description = "Listas para organizar favoritos, persistidas en PostgreSQL")
+@Tag(name = "Listas", description = "Listas para organizar favoritos. Requiere autenticación: "
+        + "un usuario solo ve y modifica sus listas; un ADMIN puede ver y operar sobre las de cualquiera.")
+@SecurityRequirement(name = "bearerAuth")
 public class ListaController {
 
     private final ListaService listaService;

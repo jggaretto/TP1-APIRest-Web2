@@ -11,20 +11,31 @@ import java.util.Optional;
 public class ListaRepositoryAdapter implements ListaRepository {
 
     private final ListaJpaRepository listaJpaRepository;
+    private final UsuarioJpaRepository usuarioJpaRepository;
 
-    public ListaRepositoryAdapter(ListaJpaRepository listaJpaRepository) {
+    public ListaRepositoryAdapter(ListaJpaRepository listaJpaRepository,
+                                  UsuarioJpaRepository usuarioJpaRepository) {
         this.listaJpaRepository = listaJpaRepository;
+        this.usuarioJpaRepository = usuarioJpaRepository;
     }
 
     @Override
     public Lista save(Lista lista) {
-        ListaEntity entity = new ListaEntity(lista.id(), lista.nombre());
+        UsuarioEntity usuario = usuarioJpaRepository.getReferenceById(lista.usuarioId());
+        ListaEntity entity = new ListaEntity(lista.id(), lista.nombre(), usuario);
         return aDominio(listaJpaRepository.save(entity));
     }
 
     @Override
     public List<Lista> findAll() {
         return listaJpaRepository.findAll().stream()
+                .map(this::aDominio)
+                .toList();
+    }
+
+    @Override
+    public List<Lista> findByUsuarioId(Long usuarioId) {
+        return listaJpaRepository.findByUsuario_Id(usuarioId).stream()
                 .map(this::aDominio)
                 .toList();
     }
@@ -45,6 +56,6 @@ public class ListaRepositoryAdapter implements ListaRepository {
     }
 
     private Lista aDominio(ListaEntity entity) {
-        return new Lista(entity.getId(), entity.getNombre());
+        return new Lista(entity.getId(), entity.getNombre(), entity.getUsuario().getId());
     }
 }

@@ -1,131 +1,299 @@
-# TP1 + TP2 · Spring Boot, API REST, arquitectura en capas y persistencia
+# TP1 + TP2 + TP3 · API REST con Spring Boot, persistencia, seguridad y CI
 
-API REST en capas (Controller → Service → Repository/Adapter) que expone:
+API REST en capas (Controller → Service → Repository/Adapter) para la materia **Desarrollo Web II** de la UNViMe. El proyecto fue creciendo práctica a práctica sobre el mismo repositorio:
 
-- **Catálogo de productos** (`/api/productos`, solo lectura) — consume la API pública [DummyJSON](https://dummyjson.com) y devuelve los datos mapeados a un DTO propio. No cambió respecto del TP1.
-- **Favoritos** (`/api/favoritos`, CRUD completo) — ahora persistido en **PostgreSQL** vía JPA/Hibernate (antes vivía en memoria, TP1).
-- **Listas** (`/api/listas`, CRUD + relación) — entidad nueva del TP2 para organizar favoritos.
+- **TP1**: catálogo de productos (DummyJSON) y CRUD de favoritos en memoria.
+- **TP2**: favoritos y listas persistidos en PostgreSQL con JPA/Hibernate, Flyway y arquitectura hexagonal (puertos y adaptadores).
+- **TP3**: usuarios, autenticación con JWT, autorización por rol y propiedad de recursos, pruebas unitarias, pruebas de integración con Testcontainers, integración continua y despliegue.
+
+## ¿Dónde termina el TP2 y dónde arranca el TP3?
+
+El corte está marcado en Git, igual que se hizo con el TP1:
+
+| Hito | Referencia |
+|------|------------|
+| Fin del TP1 | tag `entrega-tp1` |
+| Fin del TP2 | tag `entrega-tp2` (commit `47734f3`) |
+| TP3 | rama `tp3-seguridad`, creada desde `entrega-tp2` |
+
+```bash
+git switch tp3-seguridad   # estado con el TP3
+git switch main            # volver al cierre del TP2 (sin TP3)
+git tag                    # ver los hitos
+```
+
+Si querés integrar el TP3 a `main`:
+
+```bash
+git switch main
+git merge --no-ff tp3-seguridad
+```
+
+## Dominio
+
+`Usuario → Lista → Favorito`. Un usuario común solo puede ver y modificar sus propias listas (y los favoritos que cuelgan de ellas); un usuario `ADMIN` puede ver y operar sobre las de cualquiera. El catálogo de productos sigue siendo público.
+
+- **Usuario**: `id`, `email` único, `passwordHash` (BCrypt), `rol` (`USER` / `ADMIN`).
+- **Lista**: `id`, `nombre`, `usuarioId`.
+- **Favorito**: `id`, `productoId`, `listaId`, `nota`, `fechaAlta`.
+
+## Stack
+
+- Java 25
+- Spring Boot 4.1 (Web MVC, Data JPA, Security, Validation, Flyway)
+- PostgreSQL 16+
+- JWT con `jjwt` 0.12.6
+- Maven Wrapper (`./mvnw`, no hace falta tener Maven instalado)
+- JUnit 6 + Mockito + Testcontainers 2
+- springdoc / Swagger UI
 
 ## Requisitos
 
-- Java 25
-- Maven 3.9+
-- Docker y Docker Compose (o una instalación local de PostgreSQL)
+- Java 25 (`java -version`)
+- Docker **o** conexión a un PostgreSQL propio. Si no tenés Docker, el script incluido levanta un PostgreSQL portable sin sudo.
+- Nada más: Maven se descarga solo con `./mvnw`.
 
-## Cómo levantar el proyecto
+## Puesta en marcha
 
-### 1. Levantar PostgreSQL
+### 1. Base de datos
 
-Con Docker (recomendado):
+Con Docker (recomendado si lo tenés):
 
 ```bash
 docker compose up -d
 ```
 
-Esto levanta Postgres en `localhost:5432` con base `tp1_favoritos`, usuario `tp1_user` y contraseña `tp1_pass` (configurable por variables de entorno `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` — ver `docker-compose.yml`).
-
-Si no podés usar Docker: instalá PostgreSQL localmente y creá una base y usuario con esos mismos datos (o ajustá `application.properties`).
-
-### 2. Levantar la aplicación
+Sin Docker (PostgreSQL portable dentro de `.local/`):
 
 ```bash
-mvn spring-boot:run
+./scripts/local-postgres.sh start
 ```
 
-Al arrancar, **Flyway aplica automáticamente las migraciones** de `src/main/resources/db/migration/`. Para confirmar que corrieron:
+El script detecta Docker automáticamente; si no existe, descarga PostgreSQL 17 portable y lo ejecuta como tu usuario. Para detenerlo:
 
-- En el log vas a ver líneas como `Migrating schema "public" to version "1 - create favoritos"`, etc.
-- Conectándote a la base (`psql` o un cliente gráfico), la tabla `flyway_schema_history` lista las migraciones aplicadas, y deberían existir `favoritos` y `listas`.
+```bash
+./scripts/local-postgres.sh stop
+```
 
-La aplicación queda escuchando en `http://localhost:8080`.
+### 2. Aplicación
 
-## Documentación (Swagger)
+```bash
+./mvnw spring-boot:run
+```
 
-- Swagger UI: http://localhost:8080/swagger-ui.html — muestra `productos`, `favoritos` y `listas`.
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
+Al arrancar, **Flyway aplica V1..V6** automáticamente. La app queda en `http://localhost:8080`.
+
+Verificación rápida:
+
+```bash
+curl http://localhost:8080/health
+```
+
+Swagger UI: <http://localhost:8080/swagger-ui.html>  
+OpenAPI JSON: <http://localhost:8080/v3/api-docs>
+
+### Variables de entorno
+
+Todas tienen defaults pensados para desarrollo local:
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `PORT` | `8080` | Puerto HTTP |
+| `DB_HOST` | `localhost` | Host de PostgreSQL |
+| `DB_PORT` | `5432` | Puerto de PostgreSQL |
+| `POSTGRES_DB` | `tp1_favoritos` | Nombre de la base |
+| `POSTGRES_USER` | `tp1_user` | Usuario de la base |
+| `POSTGRES_PASSWORD` | `tp1_pass` | Contraseña de la base |
+| `JWT_SECRET` | secreto de desarrollo | Secreto HS256, **mínimo 32 bytes**. En producción definilo siempre |
+| `JWT_EXPIRATION_MS` | `3600000` | Vencimiento del token (1 hora) |
+| `DUMMYJSON_BASE_URL` | `https://dummyjson.com` | API externa de productos |
+
+## Autenticación
+
+1. **Registro** (`POST /api/auth/registro`): guarda la contraseña hasheada con BCrypt y asigna rol `USER`. Si el email ya existe devuelve `409`.
+2. **Login** (`POST /api/auth/login`): valida contra el hash y devuelve un JWT firmado con `id`, `email` y `rol`. Si falla, `401`.
+3. El resto de los endpoints protegidos se llaman con:
+
+```http
+Authorization: Bearer <token>
+```
+
+El filtro `JwtAuthenticationFilter` valida el token y deja la identidad en el `SecurityContext`. Los endpoints públicos son `/api/auth/**`, `/api/productos/**`, `/health` y Swagger. `/api/listas/**` y `/api/favoritos/**` exigen token válido.
+
+### Convertir un usuario en ADMIN (para probar)
+
+Registralo normalmente y después:
+
+```sql
+UPDATE usuarios SET rol = 'ADMIN' WHERE email = 'admin@example.com';
+```
+
+Volvé a hacer login para que el JWT nuevo incluya el rol `ADMIN`.
 
 ## Endpoints
 
-### Productos (solo lectura, sin cambios respecto del TP1)
+### Estado
 
-| Método | Endpoint               | Descripción                                  |
-|--------|--------------------------|------------------------------------------------|
-| GET    | `/api/productos`        | Lista productos (`?limit=&skip=` opcionales)    |
-| GET    | `/api/productos/{id}`   | Obtiene un producto por id                      |
+| Método | Endpoint  | Auth | Descripción |
+|--------|-----------|------|-------------|
+| GET    | `/health` | No   | Estado del servicio |
 
-### Favoritos (CRUD, ahora sobre PostgreSQL)
+### Autenticación
 
-| Método | Endpoint               | Código de éxito | Descripción             |
-|--------|--------------------------|------------------|---------------------------|
-| POST   | `/api/favoritos`        | 201 Created      | Crea un favorito (requiere `listaId`) |
-| GET    | `/api/favoritos`        | 200 OK           | Lista todos los favoritos |
-| GET    | `/api/favoritos/{id}`   | 200 OK           | Obtiene uno por id         |
-| PUT    | `/api/favoritos/{id}`   | 200 OK           | Actualiza un favorito      |
-| DELETE | `/api/favoritos/{id}`   | 204 No Content   | Elimina un favorito        |
+| Método | Endpoint              | Auth | Código | Descripción |
+|--------|-----------------------|------|--------|-------------|
+| POST   | `/api/auth/registro`  | No   | 201 / 409 | Registro con password hasheada |
+| POST   | `/api/auth/login`     | No   | 200 / 401 | Login, devuelve JWT |
 
-### Listas (nuevo en TP2)
+### Productos (público, solo lectura)
 
-| Método | Endpoint                          | Código de éxito  | Descripción                                  |
-|--------|-------------------------------------|-------------------|-----------------------------------------------|
-| POST   | `/api/listas`                      | 201 Created       | Crea una lista                                 |
-| GET    | `/api/listas`                      | 200 OK            | Lista todas las listas                         |
-| GET    | `/api/listas/{id}`                 | 200 OK            | Obtiene una lista por id                       |
-| GET    | `/api/listas/{id}/favoritos`       | 200 OK            | Lista los favoritos de esa lista               |
-| DELETE | `/api/listas/{id}`                 | 204 / 409         | Elimina una lista vacía (409 si tiene favoritos) |
-| POST   | `/api/listas/{origenId}/mover-favoritos` | 204 No Content | Mueve todos los favoritos de `origenId` a la lista del body, y borra `origenId` (transaccional) |
+| Método | Endpoint               | Auth | Descripción |
+|--------|------------------------|------|-------------|
+| GET    | `/api/productos`       | No   | Lista paginada (`?limit=&skip=`) desde DummyJSON |
+| GET    | `/api/productos/{id}`  | No   | Producto por id |
 
-## Manejo de errores
+### Listas (requieren token)
 
-Todas las respuestas de error siguen el mismo formato (`ErrorResponseDTO`), manejado en un `@RestControllerAdvice` central:
+| Método | Endpoint                                 | Código | Descripción |
+|--------|------------------------------------------|--------|-------------|
+| POST   | `/api/listas`                            | 201    | Crea una lista; el dueño es el usuario autenticado |
+| GET    | `/api/listas`                            | 200    | Listas propias (todas si es `ADMIN`) |
+| GET    | `/api/listas/{id}`                       | 200 / 403 / 404 | Lista propia, ajena (403) o inexistente (404) |
+| GET    | `/api/listas/{id}/favoritos`             | 200 / 403 / 404 | Favoritos de una lista |
+| DELETE | `/api/listas/{id}`                       | 204 / 409 | Elimina una lista vacía (409 si tiene favoritos) |
+| POST   | `/api/listas/{origenId}/mover-favoritos` | 204 / 403 | Mueve favoritos y borra la lista origen (transaccional) |
 
-- Favorito o lista inexistente → `404 Not Found`
-- Validación fallida del body → `400 Bad Request` (detalle de campo/motivo)
-- Intentar borrar una lista con favoritos → `409 Conflict`
-- Falla al consumir DummyJSON (caída o timeout) → `502 Bad Gateway`
-- Cualquier otro error no controlado → `500 Internal Server Error`
+### Favoritos (requieren token)
 
-## Qué cambió del TP1 al TP2 (puertos y adaptadores)
+| Método | Endpoint                | Código | Descripción |
+|--------|-------------------------|--------|-------------|
+| POST   | `/api/favoritos`        | 201    | Crea un favorito en una lista propia |
+| GET    | `/api/favoritos`        | 200    | Favoritos propios (todos si es `ADMIN`) |
+| GET    | `/api/favoritos/{id}`   | 200 / 403 / 404 | Favorito propio, ajeno o inexistente |
+| PUT    | `/api/favoritos/{id}`   | 200 / 403 / 404 | Actualiza un favorito propio |
+| DELETE | `/api/favoritos/{id}`   | 204 / 403 / 404 | Elimina un favorito propio |
 
-El puerto `FavoritoRepository` (la interfaz definida en el TP1) **no cambió su forma** — solo se le agregó `findByListaId`, necesario para el nuevo dominio de Listas. Lo que cambió fue el adapter detrás de esa interfaz:
+En `requests.http` hay una colección completa y ejecutable con la extensión REST Client de VS Code.
 
-- **TP1**: `InMemoryFavoritoRepository`, con un `Map` en memoria.
-- **TP2**: `FavoritoRepositoryAdapter`, que delega en Spring Data JPA (`FavoritoJpaRepository`) contra PostgreSQL.
+## Dónde vive la regla de autorización (consigna 4.5)
 
-`FavoritoService`, `FavoritoController` y el dominio `Favorito` (record) **no se tocaron en su lógica** — siguen hablando contra el puerto `FavoritoRepository`, sin saber si detrás hay un `Map` o una base de datos real. Eso es exactamente lo que habilita la arquitectura hexagonal: el puerto es un contrato estable, el adapter es intercambiable.
+La regla de propiedad **vive en la capa de servicio** (`ListaServiceImpl.buscarConAcceso` y `FavoritoService.buscarListaConAcceso`), no en el Controller ni en un filtro ni en anotaciones.
 
-Sí se ampliaron los DTOs (`FavoritoRequestDTO`/`FavoritoResponseDTO` ahora incluyen `listaId`), porque eso es un cambio de contrato de la API, no de la arquitectura de persistencia.
+**Por qué ahí:**
 
-## Evolución del esquema (por qué una migración nueva y no editar una vieja)
+- Es una **regla de negocio**: “esta lista pertenece a este usuario salvo que sea ADMIN” no depende de HTTP. Ponerla en el servicio hace que valga para cualquier punto de entrada (controllers, tests, futuros jobs o consumidores internos) y no solo para requests web.
+- El **Controller** queda como traductor HTTP: recibe, valida el body, delega y devuelve códigos. Si la regla viviera ahí, cualquier nuevo endpoint que toque listas tendría que repetirla, con riesgo de olvidarla.
+- Un **filtro** solo conoce la URL y el token; para decidir propiedad tendría que consultar la base y duplicar lógica de dominio. Además mezclaría autenticación (¿quién sos?) con autorización de recursos (¿podés tocar esto?).
+- **Anotaciones** (`@PreAuthorize`) sirven para reglas simples basadas en roles, pero para “el dueño de esta fila” obligan a resolver la entidad antes o a escribir expresiones acopladas a SpEL. Acá la decisión depende de datos (`lista.usuarioId`), así que el servicio es el lugar natural.
+- La **autenticación** sí vive en el filtro JWT; la **autorización por rol/propiedad** vive en el servicio. Esa separación es la que se documenta acá.
 
-Cuando en el punto 5 se agregó `lista_id` a `favoritos` (V3), esa columna quedó nullable para no romper filas ya existentes de favoritos creados antes de que existiera el concepto de "lista". Pero el modelo final requiere que todo favorito tenga una lista.
+Comportamiento buscado: si la lista no existe → `404`; si existe pero es de otro usuario y no sos `ADMIN` → `403` (nunca `404`, para no confundir “no existe” con “no es tuya”).
 
-Resolver esto editando `V1` o `V3` directamente sería incorrecto: Flyway calcula un checksum de cada migración ya aplicada y, si detecta que el contenido de una migración con una versión ya registrada en `flyway_schema_history` cambió, **falla el arranque** en vez de reaplicarla — porque el historial de versiones tiene que reflejar exactamente lo que se ejecutó contra cada entorno (dev, staging, producción), y "reescribir el pasado" rompe esa garantía en cualquier entorno que ya haya corrido esa versión.
+## Pruebas
 
-Por eso `V4__lista_id_obligatorio.sql` es una migración *nueva* que hace la transición segura: crea una lista por defecto, reasigna los favoritos huérfanos a ella, y **recién después** declara la columna `NOT NULL` — así una base con datos previos del punto 3 no rompe al migrar.
+### Unitarias (`*Test`, las corre Surefire con `mvn test`)
 
-## Transacciones y ACID
+- `ListaServiceImplTest`: confirma que la lista creada queda asociada al usuario autenticado (no a un `usuarioId` del body) y que una lista ajena lanza acceso denegado, salvo para `ADMIN`.
+- `UsuarioServiceImplTest`: confirma que `registrar` nunca guarda la contraseña en texto plano, que hashea con `PasswordEncoder`, que el email repetido da conflicto y que una password incorrecta no autentica.
 
-`ListaService.moverFavoritos` está anotado con `@Transactional`. La operación hace, en una sola transacción: valida que ambas listas existan, reasigna todos los favoritos de la lista origen a la destino (un `UPDATE` por favorito), y elimina la lista origen.
+```bash
+./mvnw test
+```
 
-Si sacáramos el `@Transactional` y una escritura fallara después de que otra ya se confirmó — por ejemplo, se reasignan 3 de 5 favoritos y el proceso se cae antes del `DELETE` de la lista origen — la base quedaría en un estado inconsistente: 3 favoritos ya apuntando a la lista destino, 2 todavía en la lista origen, y la lista origen sin borrarse. Ningún cliente que haya pedido "mover todo y cerrar la lista" esperaría ese resultado a medias. Eso es exactamente lo que la **atomicidad** de ACID garantiza: la operación se aplica completa o no se aplica nada — `@Transactional` hace que, ante cualquier excepción durante el método, Spring haga rollback de todo lo escrito hasta ese punto.
+### Integración (`*IT`, las corre Failsafe con `mvn verify`)
+
+`ListaControllerIT` levanta un **PostgreSQL real con Testcontainers**, deja que **Flyway corra V1..V6 contra una base limpia** y prueba el flujo completo con `MockMvc` y el filtro de seguridad real:
+
+| Escenario | Resultado esperado |
+|-----------|--------------------|
+| Login con credenciales válidas | `200` + token |
+| Login con credenciales inválidas | `401` |
+| Acceder a una lista propia | `200` |
+| Acceder a una lista ajena | `403` |
+| Acceder a `/api/listas` sin token | `401` |
+| Un `ADMIN` accede a una lista ajena | `200` |
+
+```bash
+./mvnw verify
+```
+
+Si no hay Docker, las clases `*IT` se **saltan** (`disabledWithoutDocker = true`) para que puedas correr `./mvnw verify` en una máquina sin Docker. En CI, donde Docker sí existe, se ejecutan de verdad. Para exigir Docker localmente, quitá ese atributo de `@Testcontainers`.
+
+Los nombres siguen la convención del práctico: clases unitarias `*Test`, integración `*IT`, y métodos `operación_escenario_resultado` (por ejemplo, `obtener_listaAjena_devuelve403`).
+
+## Integración continua (GitHub Actions)
+
+El workflow está en `.github/workflows/ci.yml` y corre en cada `push` y `pull_request`:
+
+1. checkout,
+2. Java 25 (Temurin),
+3. `chmod +x mvnw` (por si el wrapper perdió el bit de ejecución),
+4. `./mvnw -B verify` (unitarias + integración con Testcontainers),
+5. publica los reportes de Surefire/Failsafe como artefacto.
+
+Para ver el resultado: pestaña **Actions** del repo → workflow **CI** → job **Compilar, tests unitarios e integración**. Ahí están los logs y los reportes descargables.
+
+Para comprobar que el pipeline realmente falla, rompé a propósito una aserción de `ListaServiceImplTest`, hacé push, verificá el job en rojo y después revertí el cambio.
+
+## Migraciones V5 y V6
+
+- `V5__create_usuarios.sql`: crea `usuarios` con email único, `password_hash` y `rol` (`USER`/`ADMIN`), con check constraint.
+- `V6__add_usuario_id_a_listas.sql`: agrega `usuario_id` a `listas`, lo deja `NOT NULL` e indexa.
+
+Como una migración ya aplicada no se edita (Flyway valida checksums), las listas que venían del TP2 se asignan a un usuario `legacy@tp3.local` con hash inválido a propósito (`!`): no puede iniciar sesión, pero conserva los datos. Si la base no tiene listas, ese usuario no se crea.
+
+## Qué cambió del TP2 al TP3
+
+- Se agregó `spring-boot-starter-security` + `jjwt` y el filtro JWT.
+- `Lista` sumó `usuarioId`; el dueño sale del token, nunca del body.
+- `ListaService` pasó a interfaz + `ListaServiceImpl`; `UsuarioService` + `UsuarioServiceImpl` son nuevos.
+- `FavoritoService` ahora también valida que la lista del favorito sea del usuario autenticado.
+- Se agregaron migraciones V5/V6, `UsuarioRepository` y su adapter JPA.
+- Se sumaron tests unitarios, tests de integración con Testcontainers, Failsafe y el workflow de CI.
+- Se agregó `/health`, Swagger con esquema Bearer y este README.
 
 ## Estructura del proyecto
 
 ```
 src/main/java/com/desarrolloweb/tp1/
 ├── Tp1Application.java
-├── config/          → RestClient y metadata de OpenAPI
-├── controller/      → ProductoController, FavoritoController, ListaController
-├── service/         → ProductoService, FavoritoService, ListaService
-├── repository/       → Puertos: FavoritoRepository, ListaRepository
-│   └── jpa/          → Adapters: entidades JPA, JpaRepository de Spring Data,
-│                        y los *RepositoryAdapter que implementan los puertos
-├── dto/             → DTOs de entrada/salida, desacoplados del modelo interno
-├── model/           → Dominio: records Favorito y Lista
-├── client/          → Cliente RestClient hacia DummyJSON + modelos internos del JSON externo
-└── exception/       → Excepciones propias + manejador centralizado de errores
+├── config/          → RestClient, OpenAPI y SecurityConfig
+├── controller/      → Producto, Favorito, Lista, Auth y Health
+├── service/         → ProductoService, FavoritoService,
+│                      ListaService/ListaServiceImpl,
+│                      UsuarioService/UsuarioServiceImpl
+├── repository/      → Puertos: Favorito, Lista, Usuario
+│   └── jpa/         → Entidades, JpaRepository y adapters JPA
+├── dto/             → DTOs de entrada/salida
+├── model/           → Dominio: Favorito, Lista, Usuario, Rol
+├── client/          → Cliente RestClient hacia DummyJSON
+├── security/        → JwtService, filtro Bearer, CurrentUser y handlers 401/403
+└── exception/       → Excepciones propias + manejador centralizado
 
 src/main/resources/
 ├── application.properties
-└── db/migration/    → V1..V4, migraciones versionadas de Flyway
+└── db/migration/    → V1..V6
+
+src/test/java/com/desarrolloweb/tp1/
+├── service/         → ListaServiceImplTest, UsuarioServiceImplTest (*Test)
+└── controller/      → ListaControllerIT (*IT, Testcontainers)
 ```
+
+## VS Code
+
+El repo trae configuración lista en `.vscode/`:
+
+- `extensions.json`: extensiones recomendadas (Java Pack, Spring Boot, Maven, Java Test, REST Client, Docker, GitHub Actions, XML, EditorConfig).
+- `settings.json`: configuración de Java, exclusiones de `target/` y `.local/`.
+- `tasks.json`: tareas para levantar la base, correr `test`, `verify` y `spring-boot:run`.
+- `launch.json`: ejecutar la API con variables de entorno de desarrollo.
+
+Las extensiones ya fueron instaladas con `code --install-extension`; si abrís el proyecto en otra máquina, VS Code te va a ofrecer instalarlas desde `extensions.json`.
+
+## Notas de seguridad
+
+- Las contraseñas se guardan siempre con BCrypt (`PasswordEncoder`), nunca en texto plano.
+- El JWT se firma con HS256; `JWT_SECRET` debe tener al menos 32 bytes y no debe subirse al repo en producción.
+- La API es stateless: no hay sesión ni cookie de autenticación.
+- Los errores de seguridad devuelven JSON uniforme (`401`/`403`), no la página de login de Spring.
+- El usuario `legacy@tp3.local` de la migración V6 no puede autenticarse (hash inválido a propósito).

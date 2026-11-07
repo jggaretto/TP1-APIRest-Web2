@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: Compilar, tests unitarios e integración
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Dar permiso de ejecución al wrapper
+        run: chmod +x mvnw
+
+      # Surefire corre *Test; Failsafe corre *IT con Testcontainers.
+      # El runner de GitHub ya trae Docker, así que las migraciones Flyway
+      # se aplican contra un PostgreSQL limpio en cada corrida.
+      - name: Compilar y ejecutar toda la suite
+        run: ./mvnw -B verify
+
+      - name: Publicar reportes de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-de-pruebas
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          if-no-files-found: ignore

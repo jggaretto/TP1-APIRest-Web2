@@ -1,0 +1,6 @@
+# El wrapper de Unix necesita LF y permiso de ejecución.
+mvnw text eol=lf
+mvnw.cmd text eol=crlf
+
+*.sh text eol=lf
+*.sql text eol=lf

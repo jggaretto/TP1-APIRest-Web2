@@ -1,0 +1,17 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.compile.nullAnalysis.mode": "automatic",
+  "java.test.defaultConfig": "default",
+  "files.exclude": {
+    "**/target": true,
+    "**/.local": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "**/.local": true
+  },
+  "files.associations": {
+    "*.http": "http"
+  },
+  "spring-boot.ls.problem.application-properties.unknown-property": "WARNING"
+}

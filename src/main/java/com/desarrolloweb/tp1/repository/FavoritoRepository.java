@@ -11,6 +11,8 @@ public interface FavoritoRepository {
 
     List<Favorito> findAll();
 
+    List<Favorito> findByUsuarioId(Long usuarioId);
+
     Optional<Favorito> findById(Long id);
 
     boolean existsById(Long id);
