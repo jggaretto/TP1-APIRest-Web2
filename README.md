@@ -235,26 +235,6 @@ Para ver el resultado: pestaña **Actions** del repo → workflow **CI** → job
 
 Para comprobar que el pipeline realmente falla, rompé a propósito una aserción de `ListaServiceImplTest`, hacé push, verificá el job en rojo y después revertí el cambio.
 
-## Despliegue (consigna 7)
-
-Pasos sugeridos con [Render](https://render.com/) y un PostgreSQL gratuito:
-
-1. Crear un PostgreSQL en Render y copiar host, puerto, base, usuario y contraseña.
-2. Crear un **Web Service** apuntando a este repositorio y a la rama `tp3-seguridad`.
-   - Build command: `./mvnw -B -DskipTests package`
-   - Start command: `java -jar target/tp1-favoritos-0.0.1-SNAPSHOT.jar`
-3. Configurar variables de entorno:
-   - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DB_HOST`, `DB_PORT`
-   - `JWT_SECRET` (mínimo 32 caracteres, distinto del default)
-   - `PORT` (Render lo inyecta; la app ya lo lee)
-4. Deploy. En los logs de arranque tienen que verse las líneas de Flyway aplicando V1..V6 sobre la base remota.
-5. Verificar `GET https://<tu-url>/health` → `{"status":"UP",...}`.
-6. Verificar un endpoint protegido:
-   - sin token → `401`,
-   - con token de `POST /api/auth/login` → `200`.
-
-No hace falta mantener el servicio prendido después de sacar las capturas.
-
 ## Migraciones V5 y V6
 
 - `V5__create_usuarios.sql`: crea `usuarios` con email único, `password_hash` y `rol` (`USER`/`ADMIN`), con check constraint.
