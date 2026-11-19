@@ -297,3 +297,47 @@ Las extensiones ya fueron instaladas con `code --install-extension`; si abrís e
 - La API es stateless: no hay sesión ni cookie de autenticación.
 - Los errores de seguridad devuelven JSON uniforme (`401`/`403`), no la página de login de Spring.
 - El usuario `legacy@tp3.local` de la migración V6 no puede autenticarse (hash inválido a propósito).
+
+## Despliegue en Render (Consigna 7 - TP3)
+
+La aplicación se encuentra desplegada en **Render** usando Docker (Java 25) y una base de datos **PostgreSQL 16** remota.
+
+### URLs públicas
+
+- **URL base:** https://tp1-apirest-web2.onrender.com
+- **Healthcheck (`GET /health`):** https://tp1-apirest-web2.onrender.com/health
+- **Swagger UI:** https://tp1-apirest-web2.onrender.com/swagger-ui.html
+- **OpenAPI JSON:** https://tp1-apirest-web2.onrender.com/v3/api-docs
+- **Productos (público):** https://tp1-apirest-web2.onrender.com/api/productos
+
+> Nota: `GET /` devuelve `401 Unauthorized` porque la raíz no es pública y Spring Security exige un token JWT válido para cualquier ruta fuera de las listadas en `SecurityConfig`.
+
+### Infraestructura y build
+
+- **Web Service:** `TP1-APIRest-Web2` (Render, plan `free`, región `virginia`, rama `main`, `autoDeploy` por commit).
+- **Base de datos:** `tp3-db` (Render PostgreSQL 16, plan `free`, región `virginia`).
+- **Docker (`Dockerfile` + `.dockerignore`):** build multi-stage con `eclipse-temurin:25-jdk` (compila con `./mvnw clean package -DskipTests -B`) y runtime liviano con `eclipse-temurin:25-jre`.
+
+### Variables de entorno configuradas en Render
+
+| Variable | Descripción |
+|---|---|
+| `DB_HOST` | Host interno de la instancia PostgreSQL en Render |
+| `DB_PORT` | `5432` |
+| `POSTGRES_DB` | Nombre de la base remota (`tp3_db`) |
+| `POSTGRES_USER` | Usuario de la base remota |
+| `POSTGRES_PASSWORD` | Contraseña de la base remota (secreto en Render) |
+| `JWT_SECRET` | Secreto de firma JWT HS256 (mínimo 32 bytes, configurado en Render) |
+
+### Cómo replicar el despliegue
+
+1. Crear una instancia **PostgreSQL 16** en Render.
+2. Crear un **Web Service** conectado al repositorio `jggaretto/TP1-APIRest-Web2` (rama `main`, runtime **Docker**, `Dockerfile Path: ./Dockerfile`).
+3. Cargar las variables de entorno de base de datos y `JWT_SECRET` en el panel de Render (sin definir `PORT` vacío para que Render asigne su puerto por defecto).
+4. Hacer push a `main` para disparar el build y deploy automático.
+
+### Verificación realizada
+
+- **Migraciones Flyway:** en los logs de arranque se confirmó la conexión a `jdbc:postgresql://<DB_HOST>:5432/tp3_db` (PostgreSQL 16.15) y la validación y ejecución de las 6 migraciones (`V1` a `V6`).
+- **Healthcheck público:** `GET https://tp1-apirest-web2.onrender.com/health` respondió `HTTP/2 200` con `{"status":"UP","timestamp":"2026-11-19T13:44:55.071559058Z"}`.
+- **Logs del servicio:** Spring Boot / Tomcat inicializaron sin errores en el puerto `10000` (`Your service is live`).
