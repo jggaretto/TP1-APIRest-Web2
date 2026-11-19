@@ -1,0 +1,12 @@
+target/
+.git/
+.github/
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.jar
+.idea/
+.vscode/
+.local/
+*.iml
+docker-compose.yml
+requests.http
+README.md
